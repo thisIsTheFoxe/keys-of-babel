@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import { getPublicKey } from '@noble/secp256k1';
+import { bech32 } from 'bech32';
+import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
+import { ripemd160 } from '@noble/hashes/ripemd160';
 
 // Constants for library structure
 const VOLUMES_PER_SHELF = 32;
@@ -122,6 +126,32 @@ function keyToLocation(key: bigint) {
   return indexToLocation(index);
 }
 
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes).map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+function pubkeyToP2WPKH(pubkeyHex: string): string {
+  // 1. Hash160 (SHA256 then RIPEMD160)
+  const pubkeyBytes = Uint8Array.from(Buffer.from(pubkeyHex, 'hex'));
+  const hash160 = ripemd160(nobleSha256(pubkeyBytes));
+  // 2. Witness version 0 + hash160
+  const words = bech32.toWords(hash160);
+  words.unshift(0x00);
+  // 3. Encode as bech32 (bc1...)
+  return bech32.encode('bc', words);
+}
+
+// --- Types ---
+interface LocationResult {
+  hex: string;
+  wall: number;
+  shelf: number;
+  volume: number;
+  page: number;
+  _isBrainwallet?: boolean;
+  _brainwalletSource?: string;
+}
+
 export default function Home() {
   // State for navigation
   const [hex, setHex] = useState('0');
@@ -130,27 +160,42 @@ export default function Home() {
   const [volume, setVolume] = useState(0);
   const [page, setPage] = useState(0);
   const [keyInput, setKeyInput] = useState('');
-  const [locationResult, setLocationResult] = useState<ReturnType<typeof indexToLocation> | null>(null);
+  const [locationResult, setLocationResult] = useState<LocationResult | null>(null);
   const [overflow, setOverflow] = useState(false);
+  const [lastBrainwallet, setLastBrainwallet] = useState<{phrase: string, key: bigint} | null>(null);
 
-  // Compute index and overflow
-  const hexNum = base36ToBigInt(hex);
-  let idx = ((((hexNum * WALLS + BigInt(wall)) * SHELVES + BigInt(shelf)) * VOLUMES + BigInt(volume)) * PAGES + BigInt(page));
-  const didOverflow = idx >= N;
-  const key = locationToKey(hex, wall, shelf, volume, page);
+  // Helper to clear brainwallet phrase if key changes
+  function clearBrainwalletIfChanged(newKey: bigint) {
+    if (lastBrainwallet && lastBrainwallet.key !== newKey) {
+      setLastBrainwallet(null);
+    }
+  }
 
   // Clamp navigation
   function clamp(val: number, min: number, max: number) {
     return Math.max(min, Math.min(max, val));
   }
 
-  function handleKeySearch() {
-    try {
-      let k = keyInput.startsWith('0x') ? BigInt(keyInput) : BigInt('0x' + keyInput);
-      setLocationResult(keyToLocation(k));
-    } catch {
-      setLocationResult(null);
-    }
+  // Navigation field handlers that clear brainwallet if changed
+  function handleHexChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setHex(e.target.value.replace(/[^a-zA-Z0-9]/g, ''));
+    clearBrainwalletIfChanged(locationToKey(e.target.value.replace(/[^a-zA-Z0-9]/g, ''), wall, shelf, volume, page));
+  }
+  function handleWallChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setWall(clamp(Number(e.target.value), 0, WALLS_PER_HEX-1));
+    clearBrainwalletIfChanged(locationToKey(hex, clamp(Number(e.target.value), 0, WALLS_PER_HEX-1), shelf, volume, page));
+  }
+  function handleShelfChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setShelf(clamp(Number(e.target.value), 0, SHELVES_PER_WALL-1));
+    clearBrainwalletIfChanged(locationToKey(hex, wall, clamp(Number(e.target.value), 0, SHELVES_PER_WALL-1), volume, page));
+  }
+  function handleVolumeChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setVolume(clamp(Number(e.target.value), 0, VOLUMES_PER_SHELF-1));
+    clearBrainwalletIfChanged(locationToKey(hex, wall, shelf, clamp(Number(e.target.value), 0, VOLUMES_PER_SHELF-1), page));
+  }
+  function handlePageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setPage(clamp(Number(e.target.value), 0, PAGES_PER_VOLUME-1));
+    clearBrainwalletIfChanged(locationToKey(hex, wall, shelf, volume, clamp(Number(e.target.value), 0, PAGES_PER_VOLUME-1)));
   }
 
   function handleGoToLocation() {
@@ -162,6 +207,12 @@ export default function Home() {
       setPage(locationResult.page);
       setLocationResult(null);
       setKeyInput('');
+      if (locationResult._isBrainwallet && locationResult._brainwalletSource) {
+        // Store both phrase and key for context-sensitive display
+        setLastBrainwallet({phrase: locationResult._brainwalletSource, key: locationToKey(locationResult.hex, locationResult.wall, locationResult.shelf, locationResult.volume, locationResult.page)});
+      } else {
+        setLastBrainwallet(null);
+      }
     }
   }
 
@@ -185,21 +236,92 @@ export default function Home() {
     setKeyInput('');
   }
 
+  function handleKeySearch() {
+    let isBrainwallet = false;
+    let input = keyInput.trim();
+    let keyBigInt: bigint | null = null;
+    try {
+      // Try to parse as hex or decimal private key
+      if (/^(0x)?[0-9a-fA-F]{1,64}$/.test(input)) {
+        keyBigInt = input.startsWith('0x') ? BigInt(input) : BigInt('0x' + input);
+      } else {
+        // Fallback: treat as brainwallet (hash string)
+        const hash = nobleSha256(new TextEncoder().encode(input));
+        keyBigInt = BigInt('0x' + bytesToHex(hash));
+        isBrainwallet = true;
+      }
+      setLocationResult({ ...keyToLocation(keyBigInt), _isBrainwallet: isBrainwallet, _brainwalletSource: isBrainwallet ? input : undefined });
+    } catch {
+      setLocationResult(null);
+    }
+  }
+
+  // Compute index and overflow
+  const hexNum = base36ToBigInt(hex);
+  let idx = ((((hexNum * WALLS + BigInt(wall)) * SHELVES + BigInt(shelf)) * VOLUMES + BigInt(volume)) * PAGES + BigInt(page));
+  const didOverflow = idx >= N;
+  const key = locationToKey(hex, wall, shelf, volume, page);
+
+  // Compute public key and address
+  let pubkeyHex = '';
+  let bech32Addr = '';
+  let isZeroKey = key === 0n;
+  let zeroKeyMsg = '';
+  if (isZeroKey) {
+    zeroKeyMsg = '0x0 is not a valid secp256k1 private key. The valid range is 1 <= key < n (curve order). There is no corresponding public key or address.';
+  } else {
+    try {
+      pubkeyHex = bytesToHex(getPublicKey(key.toString(16).padStart(64, '0'), true));
+      bech32Addr = pubkeyToP2WPKH(pubkeyHex);
+    } catch {}
+  }
+
   return (
     <div style={{ padding: 24, fontFamily: 'monospace', maxWidth: 700, margin: 'auto' }}>
       <h1>Library of Private Keys</h1>
-      <div style={{ marginBottom: 16 }}>
-        <b>Hexagon:</b> <input type="text" value={hex} onChange={e => setHex(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))} style={{ width: 90 }} />
-        <b> Wall:</b> <input type="number" min={0} max={WALLS_PER_HEX-1} value={wall} onChange={e => setWall(clamp(Number(e.target.value), 0, WALLS_PER_HEX-1))} />
-        <b> Shelf:</b> <input type="number" min={0} max={SHELVES_PER_WALL-1} value={shelf} onChange={e => setShelf(clamp(Number(e.target.value), 0, SHELVES_PER_WALL-1))} />
-        <b> Volume:</b> <input type="number" min={0} max={VOLUMES_PER_SHELF-1} value={volume} onChange={e => setVolume(clamp(Number(e.target.value), 0, VOLUMES_PER_SHELF-1))} />
-        <b> Page:</b> <input type="number" min={0} max={PAGES_PER_VOLUME-1} value={page} onChange={e => setPage(clamp(Number(e.target.value), 0, PAGES_PER_VOLUME-1))} />
-        <button onClick={handleRandom} style={{ marginLeft: 16 }}>Random</button>
+      <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, minWidth: 280 }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <label style={{ width: 80, display: 'inline-block' }}><b>Hexagon:</b></label>
+          <input type="text" value={hex} onChange={handleHexChange} style={{ width: 90 }} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <label style={{ width: 80, display: 'inline-block' }}><b>Wall:</b></label>
+          <input type="number" min={0} max={WALLS_PER_HEX-1} value={wall} onChange={handleWallChange} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <label style={{ width: 80, display: 'inline-block' }}><b>Shelf:</b></label>
+          <input type="number" min={0} max={SHELVES_PER_WALL-1} value={shelf} onChange={handleShelfChange} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <label style={{ width: 80, display: 'inline-block' }}><b>Volume:</b></label>
+          <input type="number" min={0} max={VOLUMES_PER_SHELF-1} value={volume} onChange={handleVolumeChange} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <label style={{ width: 80, display: 'inline-block' }}><b>Page:</b></label>
+          <input type="number" min={0} max={PAGES_PER_VOLUME-1} value={page} onChange={handlePageChange} />
+        </div>
+        <button onClick={handleRandom} style={{ marginTop: 8 }}>Random</button>
       </div>
       {didOverflow && <div style={{ color: 'orange', marginBottom: 8 }}>Note: This location is outside the canonical keyspace and wraps around (periodic library).</div>}
       <div style={{ margin: '24px 0', background: '#f4f4f4', padding: 16, borderRadius: 8 }}>
         <div><b>Private Key (hex):</b></div>
-        <div style={{ fontSize: 18, wordBreak: 'break-all', color: '#333' }}>{'0x' + key.toString(16).padStart(64, '0')}</div>
+        <div style={{ fontSize: 18, wordBreak: 'break-all', color: isZeroKey ? '#a00' : '#333' }}>{'0x' + key.toString(16).padStart(64, '0')}</div>
+        {lastBrainwallet && lastBrainwallet.key === key && (
+          <div style={{ color: '#a00', marginTop: 12, fontStyle: 'italic', fontWeight: 500 }}>
+            Original brainwallet phrase for this location: '{lastBrainwallet.phrase}'<br />
+            <span style={{ color: '#a00', fontWeight: 400 }}>Never use brainwallets for real funds!</span>
+          </div>
+        )}
+        {isZeroKey ? (
+          <div style={{ color: '#a00', marginTop: 16, fontWeight: 600 }}>{zeroKeyMsg}</div>
+        ) : (
+          <>
+            <div style={{ marginTop: 16 }}><b>Public Key (hex, compressed):</b></div>
+            <div style={{ fontSize: 15, wordBreak: 'break-all', color: '#222' }}>{pubkeyHex}</div>
+            <div style={{ marginTop: 16 }}><b>Bech32 Address (P2WPKH):</b></div>
+            <div style={{ fontSize: 15, wordBreak: 'break-all', color: '#005a00' }}>{bech32Addr}</div>
+          </>
+        )}
       </div>
       <div style={{ color: '#888', fontSize: 13 }}>
         <div>Location: Hexagon {hex}, Wall {wall}, Shelf {shelf}, Volume {volume}, Page {page}</div>
@@ -207,7 +329,7 @@ export default function Home() {
       </div>
       <hr style={{ margin: '32px 0' }} />
       <div>
-        <b>Find location by key:</b> <input type="text" placeholder="0x..." value={keyInput} onChange={e => setKeyInput(e.target.value)} style={{ width: 340 }} />
+        <b>Find location by key or any string:</b> <input type="text" placeholder="0x... or any phrase" value={keyInput} onChange={e => setKeyInput(e.target.value)} style={{ width: 340 }} />
         <button onClick={handleKeySearch} style={{ marginLeft: 8 }}>Find Location</button>
         {locationResult && (
           <div style={{ marginTop: 12, color: '#444' }}>
@@ -216,6 +338,12 @@ export default function Home() {
             <div>Shelf: <b>{locationResult.shelf}</b></div>
             <div>Volume: <b>{locationResult.volume}</b></div>
             <div>Page: <b>{locationResult.page}</b></div>
+            {locationResult._isBrainwallet && (
+              <div style={{ color: '#a00', marginTop: 8, fontWeight: 600 }}>
+                Brainwallet: This key is derived from the phrase <span style={{ fontStyle: 'italic' }}>'{locationResult._brainwalletSource}'</span> using SHA256.<br />
+                <span style={{ fontWeight: 400, color: '#a00' }}>Never use brainwallets for real funds!</span>
+              </div>
+            )}
             <button onClick={handleGoToLocation} style={{ marginTop: 8 }}>Go to Location</button>
           </div>
         )}
