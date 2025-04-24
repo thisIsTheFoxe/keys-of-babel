@@ -57,11 +57,13 @@ function bigIntToBase36(num: bigint): string {
 function locationToIndex(hex: string, wall: number, shelf: number, volume: number, page: number): bigint {
   // Convert hex string to BigInt
   const hexNum = base36ToBigInt(hex);
-  return ((((hexNum * WALLS + BigInt(wall)) * SHELVES + BigInt(shelf)) * VOLUMES + BigInt(volume)) * PAGES + BigInt(page));
+  let idx = ((((hexNum * WALLS + BigInt(wall)) * SHELVES + BigInt(shelf)) * VOLUMES + BigInt(volume)) * PAGES + BigInt(page));
+  return idx % N; // Wrap to valid keyspace
 }
 
 function indexToLocation(index: bigint) {
-  let remainder = index;
+  let idx = index % N; // Wrap to valid keyspace
+  let remainder = idx;
   const page = remainder % PAGES;
   remainder /= PAGES;
   const volume = remainder % VOLUMES;
@@ -129,7 +131,12 @@ export default function Home() {
   const [page, setPage] = useState(0);
   const [keyInput, setKeyInput] = useState('');
   const [locationResult, setLocationResult] = useState<ReturnType<typeof indexToLocation> | null>(null);
+  const [overflow, setOverflow] = useState(false);
 
+  // Compute index and overflow
+  const hexNum = base36ToBigInt(hex);
+  let idx = ((((hexNum * WALLS + BigInt(wall)) * SHELVES + BigInt(shelf)) * VOLUMES + BigInt(volume)) * PAGES + BigInt(page));
+  const didOverflow = idx >= N;
   const key = locationToKey(hex, wall, shelf, volume, page);
 
   // Clamp navigation
@@ -146,6 +153,38 @@ export default function Home() {
     }
   }
 
+  function handleGoToLocation() {
+    if (locationResult) {
+      setHex(locationResult.hex);
+      setWall(locationResult.wall);
+      setShelf(locationResult.shelf);
+      setVolume(locationResult.volume);
+      setPage(locationResult.page);
+      setLocationResult(null);
+      setKeyInput('');
+    }
+  }
+
+  function randomString(length: number) {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+      result += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return result;
+  }
+
+  function handleRandom() {
+    // Pick random valid values for all fields
+    setHex(randomString(Math.floor(Math.random() * 8) + 2)); // 2-9 chars
+    setWall(Math.floor(Math.random() * WALLS_PER_HEX));
+    setShelf(Math.floor(Math.random() * SHELVES_PER_WALL));
+    setVolume(Math.floor(Math.random() * VOLUMES_PER_SHELF));
+    setPage(Math.floor(Math.random() * PAGES_PER_VOLUME));
+    setLocationResult(null);
+    setKeyInput('');
+  }
+
   return (
     <div style={{ padding: 24, fontFamily: 'monospace', maxWidth: 700, margin: 'auto' }}>
       <h1>Library of Private Keys</h1>
@@ -155,7 +194,9 @@ export default function Home() {
         <b> Shelf:</b> <input type="number" min={0} max={SHELVES_PER_WALL-1} value={shelf} onChange={e => setShelf(clamp(Number(e.target.value), 0, SHELVES_PER_WALL-1))} />
         <b> Volume:</b> <input type="number" min={0} max={VOLUMES_PER_SHELF-1} value={volume} onChange={e => setVolume(clamp(Number(e.target.value), 0, VOLUMES_PER_SHELF-1))} />
         <b> Page:</b> <input type="number" min={0} max={PAGES_PER_VOLUME-1} value={page} onChange={e => setPage(clamp(Number(e.target.value), 0, PAGES_PER_VOLUME-1))} />
+        <button onClick={handleRandom} style={{ marginLeft: 16 }}>Random</button>
       </div>
+      {didOverflow && <div style={{ color: 'orange', marginBottom: 8 }}>Note: This location is outside the canonical keyspace and wraps around (periodic library).</div>}
       <div style={{ margin: '24px 0', background: '#f4f4f4', padding: 16, borderRadius: 8 }}>
         <div><b>Private Key (hex):</b></div>
         <div style={{ fontSize: 18, wordBreak: 'break-all', color: '#333' }}>{'0x' + key.toString(16).padStart(64, '0')}</div>
@@ -175,6 +216,7 @@ export default function Home() {
             <div>Shelf: <b>{locationResult.shelf}</b></div>
             <div>Volume: <b>{locationResult.volume}</b></div>
             <div>Page: <b>{locationResult.page}</b></div>
+            <button onClick={handleGoToLocation} style={{ marginTop: 8 }}>Go to Location</button>
           </div>
         )}
       </div>
