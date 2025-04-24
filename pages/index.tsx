@@ -141,6 +141,63 @@ function pubkeyToP2WPKH(pubkeyHex: string): string {
   return bech32.encode('bc', words);
 }
 
+// Helper: base64 decode to Uint8Array
+function base64ToBytes(str: string): Uint8Array | null {
+  try {
+    // atob/btoa only work with ascii, so use Buffer if available, else fallback
+    if (typeof Buffer !== 'undefined') {
+      return Uint8Array.from(Buffer.from(str, 'base64'));
+    } else {
+      const bin = atob(str);
+      return Uint8Array.from(bin, c => c.charCodeAt(0));
+    }
+  } catch {
+    return null;
+  }
+}
+
+// Helper: get 32-byte padded/truncated array
+function to32Bytes(bytes: Uint8Array): Uint8Array {
+  if (bytes.length === 32) return bytes;
+  if (bytes.length > 32) return bytes.slice(0, 32);
+  const out = new Uint8Array(32);
+  out.set(bytes, 32 - bytes.length);
+  return out;
+}
+
+// Helper: base64 encode Uint8Array
+function bytesToBase64(bytes: Uint8Array): string {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(bytes).toString('base64');
+  } else {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+}
+
+// Helper: get canonical base64 for a private key bigint
+function keyToCanonicalBase64(key: bigint): string {
+  const hex = key.toString(16).padStart(64, '0');
+  const bytes = new Uint8Array(hex.match(/.{2}/g)!.map(b => parseInt(b, 16)));
+  return bytesToBase64(bytes);
+}
+
+// Helper: check valid hex
+function isHexKey(str: string): boolean {
+  return /^(0x)?[0-9a-fA-F]{1,64}$/.test(str);
+}
+
+// Helper: check valid base64
+function isBase64(str: string): boolean {
+  try {
+    base64ToBytes(str);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // --- Types ---
 interface LocationResult {
   hex: string;
@@ -148,8 +205,17 @@ interface LocationResult {
   shelf: number;
   volume: number;
   page: number;
-  _isBrainwallet?: boolean;
-  _brainwalletSource?: string;
+}
+
+interface SearchInterpretation {
+  input: string;
+  brainwalletKey: bigint;
+  brainwalletLoc: LocationResult;
+  base64Key?: bigint;
+  base64Loc?: LocationResult;
+  base64Canonical?: string;
+  hexKey?: bigint;
+  hexLoc?: LocationResult;
 }
 
 export default function Home() {
@@ -160,7 +226,7 @@ export default function Home() {
   const [volume, setVolume] = useState(0);
   const [page, setPage] = useState(0);
   const [keyInput, setKeyInput] = useState('');
-  const [locationResult, setLocationResult] = useState<LocationResult | null>(null);
+  const [searchResults, setSearchResults] = useState<SearchInterpretation | null>(null);
   const [overflow, setOverflow] = useState(false);
   const [lastBrainwallet, setLastBrainwallet] = useState<{phrase: string, key: bigint} | null>(null);
 
@@ -198,31 +264,20 @@ export default function Home() {
     clearBrainwalletIfChanged(locationToKey(hex, wall, shelf, volume, clamp(Number(e.target.value), 0, PAGES_PER_VOLUME-1)));
   }
 
-  function handleGoToLocation() {
-    if (locationResult) {
-      setHex(locationResult.hex);
-      setWall(locationResult.wall);
-      setShelf(locationResult.shelf);
-      setVolume(locationResult.volume);
-      setPage(locationResult.page);
-      setLocationResult(null);
-      setKeyInput('');
-      if (locationResult._isBrainwallet && locationResult._brainwalletSource) {
-        // Store both phrase and key for context-sensitive display
-        setLastBrainwallet({phrase: locationResult._brainwalletSource, key: locationToKey(locationResult.hex, locationResult.wall, locationResult.shelf, locationResult.volume, locationResult.page)});
-      } else {
-        setLastBrainwallet(null);
-      }
+  function handleGoToLocation(loc: LocationResult) {
+    setHex(loc.hex);
+    setWall(loc.wall);
+    setShelf(loc.shelf);
+    setVolume(loc.volume);
+    setPage(loc.page);
+    setSearchResults(null);
+    setKeyInput('');
+    // If this is a brainwallet location, record the phrase for display
+    if (searchResults && searchResults.brainwalletLoc.hex === loc.hex && searchResults.brainwalletLoc.wall === loc.wall && searchResults.brainwalletLoc.shelf === loc.shelf && searchResults.brainwalletLoc.volume === loc.volume && searchResults.brainwalletLoc.page === loc.page) {
+      setLastBrainwallet({ phrase: searchResults.input, key: searchResults.brainwalletKey });
+    } else {
+      setLastBrainwallet(null);
     }
-  }
-
-  function randomString(length: number) {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < length; i++) {
-      result += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return result;
   }
 
   function handleRandom() {
@@ -232,46 +287,68 @@ export default function Home() {
     setShelf(Math.floor(Math.random() * SHELVES_PER_WALL));
     setVolume(Math.floor(Math.random() * VOLUMES_PER_SHELF));
     setPage(Math.floor(Math.random() * PAGES_PER_VOLUME));
-    setLocationResult(null);
+    setSearchResults(null);
     setKeyInput('');
   }
 
-  function handleKeySearch() {
-    let isBrainwallet = false;
-    let input = keyInput.trim();
-    let keyBigInt: bigint | null = null;
-    try {
-      // Try to parse as hex or decimal private key
-      if (/^(0x)?[0-9a-fA-F]{1,64}$/.test(input)) {
-        keyBigInt = input.startsWith('0x') ? BigInt(input) : BigInt('0x' + input);
-      } else {
-        // Fallback: treat as brainwallet (hash string)
-        const hash = nobleSha256(new TextEncoder().encode(input));
-        keyBigInt = BigInt('0x' + bytesToHex(hash));
-        isBrainwallet = true;
-      }
-      setLocationResult({ ...keyToLocation(keyBigInt), _isBrainwallet: isBrainwallet, _brainwalletSource: isBrainwallet ? input : undefined });
-    } catch {
-      setLocationResult(null);
+  // --- Search interpretation ---
+  function interpretInput(input: string): SearchInterpretation {
+    // 1. Brainwallet (SHA256)
+    const brainHash = nobleSha256(new TextEncoder().encode(input));
+    const brainKey = BigInt('0x' + bytesToHex(brainHash));
+    const brainLoc = keyToLocation(brainKey);
+
+    // 2. Base64 (if decodable)
+    let base64Key: bigint | undefined, base64Loc: LocationResult | undefined, base64Canonical: string | undefined;
+    const bytes = base64ToBytes(input);
+    if (bytes) {
+      const padded = to32Bytes(bytes);
+      base64Key = BigInt('0x' + bytesToHex(padded));
+      base64Loc = keyToLocation(base64Key);
+      // Show canonical base64 for this key
+      base64Canonical = bytesToBase64(padded);
     }
+
+    // 3. Hex (if valid)
+    let hexKey: bigint | undefined, hexLoc: LocationResult | undefined;
+    if (isHexKey(input)) {
+      hexKey = input.startsWith('0x') ? BigInt(input) : BigInt('0x' + input);
+      hexLoc = keyToLocation(hexKey);
+    }
+
+    return {
+      input,
+      brainwalletKey: brainKey,
+      brainwalletLoc: brainLoc,
+      base64Key,
+      base64Loc,
+      base64Canonical,
+      hexKey,
+      hexLoc
+    };
+  }
+
+  function handleKeySearch() {
+    setSearchResults(interpretInput(keyInput.trim()));
   }
 
   // Compute index and overflow
   const hexNum = base36ToBigInt(hex);
   let idx = ((((hexNum * WALLS + BigInt(wall)) * SHELVES + BigInt(shelf)) * VOLUMES + BigInt(volume)) * PAGES + BigInt(page));
   const didOverflow = idx >= N;
-  const key = locationToKey(hex, wall, shelf, volume, page);
+  const currentKey = locationToKey(hex, wall, shelf, volume, page);
+  const currentCanonicalBase64 = keyToCanonicalBase64(currentKey);
 
   // Compute public key and address
   let pubkeyHex = '';
   let bech32Addr = '';
-  let isZeroKey = key === 0n;
+  let isZeroKey = currentKey === 0n;
   let zeroKeyMsg = '';
   if (isZeroKey) {
     zeroKeyMsg = '0x0 is not a valid secp256k1 private key. The valid range is 1 <= key < n (curve order). There is no corresponding public key or address.';
   } else {
     try {
-      pubkeyHex = bytesToHex(getPublicKey(key.toString(16).padStart(64, '0'), true));
+      pubkeyHex = bytesToHex(getPublicKey(currentKey.toString(16).padStart(64, '0'), true));
       bech32Addr = pubkeyToP2WPKH(pubkeyHex);
     } catch {}
   }
@@ -303,51 +380,76 @@ export default function Home() {
         <button onClick={handleRandom} style={{ marginTop: 8 }}>Random</button>
       </div>
       {didOverflow && <div style={{ color: 'orange', marginBottom: 8 }}>Note: This location is outside the canonical keyspace and wraps around (periodic library).</div>}
-      <div style={{ margin: '24px 0', background: '#f4f4f4', padding: 16, borderRadius: 8 }}>
-        <div><b>Private Key (hex):</b></div>
-        <div style={{ fontSize: 18, wordBreak: 'break-all', color: isZeroKey ? '#a00' : '#333' }}>{'0x' + key.toString(16).padStart(64, '0')}</div>
-        {lastBrainwallet && lastBrainwallet.key === key && (
-          <div style={{ color: '#a00', marginTop: 12, fontStyle: 'italic', fontWeight: 500 }}>
-            Original brainwallet phrase for this location: '{lastBrainwallet.phrase}'<br />
+      <div style={{ margin: '24px 0', background: '#f7f7fa', borderRadius: 10, padding: 20, boxShadow: '0 1px 4px #0001' }}>
+        <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 8 }}>Current Location</div>
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ fontWeight: 500 }}>Private Key:</span> <span style={{ fontFamily: 'monospace' }}>{'0x' + currentKey.toString(16).padStart(64, '0')}</span>
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ fontWeight: 500 }}>Canonical Base64:</span> <span style={{ fontFamily: 'monospace' }}>{currentCanonicalBase64}</span>
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ fontWeight: 500 }}>Public Key:</span> <span style={{ fontFamily: 'monospace' }}>{pubkeyHex}</span>
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ fontWeight: 500 }}>Bech32 Address:</span> <span style={{ fontFamily: 'monospace' }}>{bech32Addr}</span>
+        </div>
+        {lastBrainwallet && lastBrainwallet.key === currentKey && (
+          <div style={{ marginTop: 8, color: '#a00', fontSize: 13 }}>
+            Brainwallet phrase: <span style={{ fontStyle: 'italic' }}>{lastBrainwallet.phrase}</span><br />
             <span style={{ color: '#a00', fontWeight: 400 }}>Never use brainwallets for real funds!</span>
           </div>
-        )}
-        {isZeroKey ? (
-          <div style={{ color: '#a00', marginTop: 16, fontWeight: 600 }}>{zeroKeyMsg}</div>
-        ) : (
-          <>
-            <div style={{ marginTop: 16 }}><b>Public Key (hex, compressed):</b></div>
-            <div style={{ fontSize: 15, wordBreak: 'break-all', color: '#222' }}>{pubkeyHex}</div>
-            <div style={{ marginTop: 16 }}><b>Bech32 Address (P2WPKH):</b></div>
-            <div style={{ fontSize: 15, wordBreak: 'break-all', color: '#005a00' }}>{bech32Addr}</div>
-          </>
         )}
       </div>
       <div style={{ color: '#888', fontSize: 13 }}>
         <div>Location: Hexagon {hex}, Wall {wall}, Shelf {shelf}, Volume {volume}, Page {page}</div>
-        <div>Key Index: {key.toString()}</div>
+        <div>Key Index: {currentKey.toString()}</div>
       </div>
       <hr style={{ margin: '32px 0' }} />
       <div>
-        <b>Find location by key or any string:</b> <input type="text" placeholder="0x... or any phrase" value={keyInput} onChange={e => setKeyInput(e.target.value)} style={{ width: 340 }} />
+        <b>Find location by key or any string:</b> <input type="text" placeholder="0x... or any phrase or base64" value={keyInput} onChange={e => setKeyInput(e.target.value)} style={{ width: 340 }} />
         <button onClick={handleKeySearch} style={{ marginLeft: 8 }}>Find Location</button>
-        {locationResult && (
-          <div style={{ marginTop: 12, color: '#444' }}>
-            <div>Hexagon: <b>{locationResult.hex}</b></div>
-            <div>Wall: <b>{locationResult.wall}</b></div>
-            <div>Shelf: <b>{locationResult.shelf}</b></div>
-            <div>Volume: <b>{locationResult.volume}</b></div>
-            <div>Page: <b>{locationResult.page}</b></div>
-            {locationResult._isBrainwallet && (
-              <div style={{ color: '#a00', marginTop: 8, fontWeight: 600 }}>
-                Brainwallet: This key is derived from the phrase <span style={{ fontStyle: 'italic' }}>'{locationResult._brainwalletSource}'</span> using SHA256.<br />
-                <span style={{ fontWeight: 400, color: '#a00' }}>Never use brainwallets for real funds!</span>
+        {searchResults && (
+          <div style={{ marginTop: 18, color: '#444', background: '#f9f9f9', borderRadius: 8, padding: 12 }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>Interpretations for: <span style={{ fontStyle: 'italic' }}>{searchResults.input}</span></div>
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontWeight: 500 }}>Brainwallet (SHA256 of input):</div>
+              <div style={{ fontSize: 12, color: '#a00', marginBottom: 2 }}>Never use brainwallets for real funds!</div>
+              <div>Private Key: <span style={{ fontFamily: 'monospace' }}>{'0x' + searchResults.brainwalletKey.toString(16).padStart(64, '0')}</span></div>
+              <div>Canonical Base64: <span style={{ fontFamily: 'monospace' }}>{keyToCanonicalBase64(searchResults.brainwalletKey)}</span></div>
+              <div>Location: Hexagon <b>{searchResults.brainwalletLoc.hex}</b>, Wall <b>{searchResults.brainwalletLoc.wall}</b>, Shelf <b>{searchResults.brainwalletLoc.shelf}</b>, Volume <b>{searchResults.brainwalletLoc.volume}</b>, Page <b>{searchResults.brainwalletLoc.page}</b></div>
+              <button onClick={() => handleGoToLocation(searchResults.brainwalletLoc)} style={{ marginTop: 6 }}>Go to Brainwallet Location</button>
+            </div>
+            {searchResults.base64Key && searchResults.base64Loc && searchResults.base64Canonical && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontWeight: 500 }}>Base64-decoded key:</div>
+                <div>Private Key: <span style={{ fontFamily: 'monospace' }}>{'0x' + searchResults.base64Key.toString(16).padStart(64, '0')}</span></div>
+                <div>Canonical Base64: <span style={{ fontFamily: 'monospace' }}>{searchResults.base64Canonical}</span></div>
+                <div>Location: Hexagon <b>{searchResults.base64Loc.hex}</b>, Wall <b>{searchResults.base64Loc.wall}</b>, Shelf <b>{searchResults.base64Loc.shelf}</b>, Volume <b>{searchResults.base64Loc.volume}</b>, Page <b>{searchResults.base64Loc.page}</b></div>
+                <button onClick={() => handleGoToLocation(searchResults.base64Loc!)} style={{ marginTop: 6 }}>Go to Base64 Location</button>
               </div>
             )}
-            <button onClick={handleGoToLocation} style={{ marginTop: 8 }}>Go to Location</button>
+            {searchResults.hexKey && searchResults.hexLoc && (
+              <div>
+                <div style={{ fontWeight: 500 }}>Hex/Private key:</div>
+                <div>Private Key: <span style={{ fontFamily: 'monospace' }}>{'0x' + searchResults.hexKey.toString(16).padStart(64, '0')}</span></div>
+                <div>Canonical Base64: <span style={{ fontFamily: 'monospace' }}>{keyToCanonicalBase64(searchResults.hexKey)}</span></div>
+                <div>Location: Hexagon <b>{searchResults.hexLoc.hex}</b>, Wall <b>{searchResults.hexLoc.wall}</b>, Shelf <b>{searchResults.hexLoc.shelf}</b>, Volume <b>{searchResults.hexLoc.volume}</b>, Page <b>{searchResults.hexLoc.page}</b></div>
+                <button onClick={() => handleGoToLocation(searchResults.hexLoc!)} style={{ marginTop: 6 }}>Go to Hex Location</button>
+              </div>
+            )}
           </div>
         )}
       </div>
     </div>
   );
+}
+
+function randomString(length: number) {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return result;
 }
