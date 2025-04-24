@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/router";
 import { getPublicKey } from '@noble/secp256k1';
 import { bech32 } from 'bech32';
 import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
@@ -188,16 +189,6 @@ function isHexKey(str: string): boolean {
   return /^(0x)?[0-9a-fA-F]{1,64}$/.test(str);
 }
 
-// Helper: check valid base64
-function isBase64(str: string): boolean {
-  try {
-    base64ToBytes(str);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 // --- Types ---
 interface LocationResult {
   hex: string;
@@ -219,16 +210,63 @@ interface SearchInterpretation {
 }
 
 export default function Home() {
-  // State for navigation
-  const [hex, setHex] = useState('0');
-  const [wall, setWall] = useState(0);
-  const [shelf, setShelf] = useState(0);
-  const [volume, setVolume] = useState(0);
-  const [page, setPage] = useState(0);
+  const router = useRouter();
+  // --- UI State ---
+  const [hydrated, setHydrated] = useState(false);
+  function getInitialLocation() {
+    if (typeof window === 'undefined') return { hex: '0', wall: 0, shelf: 0, volume: 0, page: 0 };
+    const params = new URLSearchParams(window.location.search);
+    return {
+      hex: params.get('hex') || '0',
+      wall: Number(params.get('wall') ?? 0),
+      shelf: Number(params.get('shelf') ?? 0),
+      volume: Number(params.get('volume') ?? 0),
+      page: Number(params.get('page') ?? 0)
+    };
+  }
+  const [location, setLocation] = useState(getInitialLocation());
+  const [hex, setHex] = useState(location.hex);
+  const [wall, setWall] = useState(location.wall);
+  const [shelf, setShelf] = useState(location.shelf);
+  const [volume, setVolume] = useState(location.volume);
+  const [page, setPage] = useState(location.page);
   const [keyInput, setKeyInput] = useState('');
   const [searchResults, setSearchResults] = useState<SearchInterpretation | null>(null);
   const [overflow, setOverflow] = useState(false);
   const [lastBrainwallet, setLastBrainwallet] = useState<{phrase: string, key: bigint} | null>(null);
+  const [copyMsg, setCopyMsg] = useState('');
+
+  // --- Hydration fix: only render after mounted ---
+  useEffect(() => { setHydrated(true); }, []);
+
+  // --- Sync state with URL on mount and router changes ---
+  useEffect(() => {
+    if (!router.isReady) return;
+    const { hex: qHex, wall: qWall, shelf: qShelf, volume: qVolume, page: qPage } = router.query;
+    if (
+      typeof qHex === 'string' &&
+      typeof qWall === 'string' &&
+      typeof qShelf === 'string' &&
+      typeof qVolume === 'string' &&
+      typeof qPage === 'string'
+    ) {
+      if (qHex !== hex) setHex(qHex);
+      if (Number(qWall) !== wall) setWall(Number(qWall));
+      if (Number(qShelf) !== shelf) setShelf(Number(qShelf));
+      if (Number(qVolume) !== volume) setVolume(Number(qVolume));
+      if (Number(qPage) !== page) setPage(Number(qPage));
+    }
+  }, [router.isReady, router.query]);
+
+  // --- Update URL when location changes ---
+  useEffect(() => {
+    router.push({
+      pathname: '/',
+      query: { hex, wall, shelf, volume, page }
+    });
+  }, [hex, wall, shelf, volume, page]);
+
+  if (!hydrated) return null;
 
   // Helper to clear brainwallet phrase if key changes
   function clearBrainwalletIfChanged(newKey: bigint) {
@@ -353,6 +391,14 @@ export default function Home() {
     } catch {}
   }
 
+  // --- Bookmark/share button ---
+  function handleCopyUrl() {
+    const url = `${window.location.origin}/?hex=${hex}&wall=${wall}&shelf=${shelf}&volume=${volume}&page=${page}`;
+    navigator.clipboard.writeText(url);
+    setCopyMsg('Link copied!');
+    setTimeout(() => setCopyMsg(''), 1200);
+  }
+
   return (
     <div style={{ padding: 24, fontFamily: 'monospace', maxWidth: 700, margin: 'auto' }}>
       <h1>Library of Private Keys</h1>
@@ -381,7 +427,10 @@ export default function Home() {
       </div>
       {didOverflow && <div style={{ color: 'orange', marginBottom: 8 }}>Note: This location is outside the canonical keyspace and wraps around (periodic library).</div>}
       <div style={{ margin: '24px 0', background: '#f7f7fa', borderRadius: 10, padding: 20, boxShadow: '0 1px 4px #0001' }}>
-        <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 8 }}>Current Location</div>
+        <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 8 }}>Current Location
+          <button onClick={handleCopyUrl} style={{ marginLeft: 16, fontSize: 13, padding: '2px 8px', borderRadius: 5, border: '1px solid #bbb', background: '#fff', cursor: 'pointer' }}>Bookmark/Share</button>
+          <span style={{ color: '#080', marginLeft: 8, fontSize: 13 }}>{copyMsg}</span>
+        </div>
         <div style={{ marginBottom: 8 }}>
           <span style={{ fontWeight: 500 }}>Private Key:</span> <span style={{ fontFamily: 'monospace' }}>{'0x' + currentKey.toString(16).padStart(64, '0')}</span>
         </div>
