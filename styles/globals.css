@@ -20,3 +20,125 @@ h1 {
   font-size: 2em;
   margin-bottom: 0.5em;
 }
+
+.current-location {
+  margin: 24px 0;
+  background: #f7f7fa;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px #0001;
+}
+
+.current-location-title {
+  font-weight: 600;
+  font-size: 18px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bookmark-btn {
+  margin-left: 16px;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  border: 1px solid #bbb;
+  background: #fff;
+  cursor: pointer;
+}
+
+.copy-msg {
+  color: #080;
+  margin-left: 8px;
+  font-size: 13px;
+}
+
+.privkey-label, .pubkey-label, .address-label, .balance-label {
+  font-weight: 500;
+}
+
+.privkey-value, .pubkey-value, .address-value {
+  font-family: monospace;
+}
+
+.balance-loading {
+  color: #888;
+}
+
+.balance-error {
+  color: red;
+}
+
+.balance-zero {
+  color: gray;
+}
+
+.balance-nonzero {
+  color: green;
+}
+
+.zerokey-msg {
+  color: #a00;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.brainwallet-msg {
+  margin-top: 8px;
+  color: #a00;
+  font-size: 13px;
+}
+
+.brainwallet-phrase {
+  font-style: italic;
+}
+
+.brainwallet-warning {
+  color: #a00;
+  font-weight: 400;
+}
+
+.location-details {
+  font-size: 13px;
+  color: #888;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #181a1b;
+    color: #f0f0f0;
+  }
+  input[type="number"], input[type="text"] {
+    background: #23272a;
+    color: #f0f0f0;
+    border-color: #444;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    color: #fff;
+  }
+  button {
+    background: #23272a;
+    color: #f0f0f0;
+    border-color: #444;
+  }
+  div, label, select, option {
+    color: #f0f0f0;
+    background: transparent;
+  }
+  .current-location {
+    background: #23272a;
+    box-shadow: 0 1px 8px #0006;
+  }
+  .bookmark-btn {
+    background: #181a1b;
+    color: #f0f0f0;
+    border-color: #444;
+  }
+  .copy-msg {
+    color: #6f6;
+  }
+  .location-details {
+    color: #bbb;
+  }
+}

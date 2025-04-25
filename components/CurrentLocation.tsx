@@ -71,41 +71,38 @@ const CurrentLocation: React.FC<Props> = (props) => {
   }, [bech32Addr, network]);
 
   return (
-    <div style={{ margin: '24px 0', background: '#f7f7fa', borderRadius: 10, padding: 20, boxShadow: '0 1px 4px #0001' }}>
-      <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 8 }}>
+    <div className="current-location">
+      <div className="current-location-title">
         Current Location
-        <button onClick={handleCopyUrl} style={{ marginLeft: 16, fontSize: 13, padding: '2px 8px', borderRadius: 5, border: '1px solid #bbb', background: '#fff', cursor: 'pointer' }}>Bookmark/Share</button>
-        <span style={{ color: '#080', marginLeft: 8, fontSize: 13 }}>{copyMsg}</span>
+        <button onClick={handleCopyUrl} className="bookmark-btn">Bookmark/Share</button>
+        <span className="copy-msg">{copyMsg}</span>
       </div>
-      <div style={{ marginBottom: 8 }}>
-        <span style={{ fontWeight: 500 }}>Private Key:</span> <span style={{ fontFamily: 'monospace' }}>{'0x' + currentKey.toString(16).padStart(64, '0')}</span>
+      <div className="privkey-row">
+        <span className="privkey-label">Private Key:</span> <span className="privkey-value">{'0x' + currentKey.toString(16).padStart(64, '0')}</span>
       </div>
-      <div style={{ marginBottom: 8 }}>
-        <span style={{ fontWeight: 500 }}>Canonical Base64:</span> <span style={{ fontFamily: 'monospace' }}>{currentCanonicalBase64}</span>
+      <div className="pubkey-row">
+        <span className="pubkey-label">Public Key:</span> <span className="pubkey-value">{pubkeyHex}</span>
       </div>
-      <div style={{ marginBottom: 8 }}>
-        <span style={{ fontWeight: 500 }}>Public Key:</span> <span style={{ fontFamily: 'monospace' }}>{pubkeyHex}</span>
+      <div className="address-row">
+        <span className="address-label">Bech32 Address:</span> <span className="address-value">{bech32Addr}</span>
       </div>
-      <div style={{ marginBottom: 8 }}>
-        <span style={{ fontWeight: 500 }}>Bech32 Address:</span> <span style={{ fontFamily: 'monospace' }}>{bech32Addr}</span>
-      </div>
-      <div style={{ marginBottom: 8 }}>
-        <span style={{ fontWeight: 500 }}>Balance:</span>{' '}
-        {balanceLoading ? 'Loading...' :
-          balanceError ? <span style={{ color: 'red' }}>{balanceError}</span> :
-          balance !== null ? <span style={{ color: balance === '0.00000000' ? 'gray' : 'green' }}>{balance} BTC</span> : null}
+      <div className="balance-row">
+        <span className="balance-label">Balance:</span>{' '}
+        {balanceLoading ? <span className="balance-loading">Loading...</span> :
+          balanceError ? <span className="balance-error">{balanceError}</span> :
+          balance !== null ? <span className={balance === '0.00000000' ? 'balance-zero' : 'balance-nonzero'}>{balance} BTC</span> : null}
       </div>
       {isZeroKey && (
-        <div style={{ color: '#a00', fontSize: 13, marginTop: 8 }}>{zeroKeyMsg}</div>
+        <div className="zerokey-msg">{zeroKeyMsg}</div>
       )}
       {lastBrainwallet && lastBrainwallet.key === currentKey && (
-        <div style={{ marginTop: 8, color: '#a00', fontSize: 13 }}>
-          Brainwallet phrase: <span style={{ fontStyle: 'italic' }}>{lastBrainwallet.phrase}</span><br />
-          <span style={{ color: '#a00', fontWeight: 400 }}>Never use brainwallets for real funds!</span>
+        <div className="brainwallet-msg">
+          Brainwallet phrase: <span className="brainwallet-phrase">{lastBrainwallet.phrase}</span><br />
+          <span className="brainwallet-warning">Never use brainwallets for real funds!</span>
         </div>
       )}
-      <div style={{ fontSize: 13, color: '#888' }}>
-        <b>Location:</b> Hexagon {hex}
+      <div className="location-details">
+        <b>Location:</b><br />Hexagon {hex}
         <div>Wall: {typeof wall === 'number' ? wall : 0}</div>
         <div>Shelf: {typeof shelf === 'number' ? shelf : 0}</div>
         <div>Volume: {typeof volume === 'number' ? volume : 0}</div>
