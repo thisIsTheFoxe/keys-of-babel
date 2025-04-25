@@ -104,6 +104,42 @@ h1 {
   color: #888;
 }
 
+.section {
+  margin-bottom: 18px;
+}
+
+.divider {
+  height: 1px;
+  background: #e0e0e0;
+  margin: 16px 0;
+  border: none;
+}
+
+.location-label {
+  font-weight: 500;
+  color: #555;
+  margin-right: 4px;
+}
+
+.location-value {
+  color: #222;
+  font-family: monospace;
+}
+
+.location-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.base64-label {
+  font-weight: 500;
+}
+
+.base64-value {
+  font-family: monospace;
+}
+
 @media (prefers-color-scheme: dark) {
   body {
     background: #181a1b;
@@ -140,5 +176,14 @@ h1 {
   }
   .location-details {
     color: #bbb;
+  }
+  .divider {
+    background: #333;
+  }
+  .location-label {
+    color: #bbb;
+  }
+  .location-value {
+    color: #fff;
   }
 }
