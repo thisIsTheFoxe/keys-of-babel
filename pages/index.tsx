@@ -19,6 +19,8 @@ export default function Home() {
   const [copyMsg, setCopyMsg] = useState('');
   const [network, setNetwork] = useState<'mainnet' | 'testnet'>('mainnet');
   const [parallelCount, setParallelCount] = useState(2);
+  const [rateLimitHit, setRateLimitHit] = useState(false);
+  const [rateLimitTime, setRateLimitTime] = useState<string | null>(null);
 
   // --- Auto-Search State ---
   const [autoSearchRunning, setAutoSearchRunning] = useState(false);
@@ -69,6 +71,8 @@ export default function Home() {
     setAutoSearchRunning(true);
     setAutoSearchCount(0);
     setAutoSearchFound(null);
+    setRateLimitHit(false);
+    setRateLimitTime(null);
     autoSearchAbort.current.stop = false;
     let baseIdx = cryptoUtils.locationToIndex(location.hex, location.wall, location.shelf, location.volume, location.page);
     let found = false;
@@ -90,14 +94,57 @@ export default function Home() {
             ? `https://blockstream.info/api/address/${address}`
             : `https://blockstream.info/testnet/api/address/${address}`;
           const res = await fetch(endpoint);
-          if (res.ok) {
-            const data = await res.json();
-            const funded = data.chain_stats?.funded_txo_sum ?? 0;
-            const spent = data.chain_stats?.spent_txo_sum ?? 0;
+          console.log("STATUS", res.status);
+
+          let data = null;
+          let isRateLimit = false;
+          let bodyText = '';
+
+          if (res.status === 429) {
+            isRateLimit = true;
+            console.log("RATE LIMIT (status)");
+          } else if (res.ok) {
+            try {
+              bodyText = await res.text();
+              data = JSON.parse(bodyText);
+              if (
+                (typeof data === 'object' && data !== null && typeof data.error === 'string' && data.error.toLowerCase().includes('rate limit')) ||
+                !data.chain_stats // If chain_stats missing, likely not a normal address response
+              ) {
+                isRateLimit = true;
+                console.log("RATE LIMIT (body)", data);
+              }
+            } catch (e) {
+              // JSON parse failed, possibly HTML error page
+              isRateLimit = true;
+              bodyText = bodyText || (await res.text());
+              console.log("RATE LIMIT (invalid JSON)", bodyText);
+            }
+          }
+
+          if (isRateLimit) {
+            setRateLimitHit(true);
+            setRateLimitTime(new Date().toLocaleTimeString());
+            autoSearchAbort.current.stop = true;
+            setAutoSearchRunning(false);
+            break;
+          }
+
+          if (data && data.chain_stats) {
+            const funded = data.chain_stats.funded_txo_sum ?? 0;
+            const spent = data.chain_stats.spent_txo_sum ?? 0;
             const sats = funded - spent;
             balance = (sats / 1e8).toFixed(8);
+            setRateLimitHit(false);
           }
-        } catch {}
+        } catch (e) {
+          console.log("FETCH ERROR", e);
+          setRateLimitHit(true);
+          setRateLimitTime(new Date().toLocaleTimeString());
+          autoSearchAbort.current.stop = true;
+          setAutoSearchRunning(false);
+          break;
+        }
         count++;
         setAutoSearchCount(c => c + 1);
         if (balance !== '0.00000000' && !found) {
@@ -207,6 +254,13 @@ export default function Home() {
             style={{ width: 40, marginLeft: 4 }} />
         </label>
       </div>
+      {rateLimitHit && (
+        <div style={{ marginBottom: 8, color: '#b71c1c', fontWeight: 500 }}>
+          ⚠️ Auto-search stopped due to network error or rate limit.<br />
+          Time: {rateLimitTime}<br />
+          Please try again later or reduce parallelism.
+        </div>
+      )}
       {autoSearchRunning && (() => {
         const pages = autoSearchCount;
         const volumes = Math.floor(pages / Number(cryptoUtils.PAGES));
