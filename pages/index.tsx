@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import { getPublicKey } from '@noble/secp256k1';
+import Head from 'next/head';
 
 // Modularized imports
 import LocationInputs from '../components/LocationInputs';
@@ -232,123 +233,129 @@ export default function Home() {
   }
 
   return (
-    <div style={{ padding: 24, fontFamily: 'monospace', maxWidth: 700, margin: 'auto' }}>
-      <h1>Library of Private Keys</h1>
-      <div style={{ marginBottom: 12 }}>
-        <label><b>Network:</b></label>{' '}
-        <select value={network} onChange={e => setNetwork(e.target.value as 'mainnet' | 'testnet')}>
-          <option value="mainnet">Bitcoin Mainnet</option>
-          <option value="testnet">Bitcoin Testnet</option>
-        </select>
-      </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
-        <button onClick={handleFirstPage}>First Page</button>
-        <button onClick={handleRandom}>Random</button>
-        <button onClick={handleLastPage}>Last Page</button>
-        <button onClick={autoSearch} disabled={autoSearchRunning} style={{ background: '#1976d2', color: '#fff' }}>Auto-Search</button>
-        {autoSearchRunning && <button onClick={stopAutoSearch} style={{ background: '#a00', color: '#fff' }}>Stop</button>}
-        <label style={{ marginLeft: 12 }}>
-          Parallelism:
-          <input type="number" min={1} max={10} value={parallelCount} disabled={autoSearchRunning}
-            onChange={e => setParallelCount(Math.max(1, Math.min(10, Number(e.target.value))))}
-            style={{ width: 40, marginLeft: 4 }} />
-        </label>
-      </div>
-      {rateLimitHit && (
-        <div style={{ marginBottom: 8, color: '#b71c1c', fontWeight: 500 }}>
-          ⚠️ Auto-search stopped due to network error or rate limit.<br />
-          Time: {rateLimitTime}<br />
-          Please try again later or reduce parallelism.
+    <>
+      <Head>
+        <title>Keys of Babel - Bitcoin Private Key Library</title>
+        <meta name="description" content="Explore the infinite library of Bitcoin private keys. Inspired by Borges' Library of Babel." />
+      </Head>
+      <div style={{ padding: 24, fontFamily: 'monospace', maxWidth: 700, margin: 'auto' }}>
+        <h1>Library of Private Keys</h1>
+        <div style={{ marginBottom: 12 }}>
+          <label><b>Network:</b></label>{' '}
+          <select value={network} onChange={e => setNetwork(e.target.value as 'mainnet' | 'testnet')}>
+            <option value="mainnet">Bitcoin Mainnet</option>
+            <option value="testnet">Bitcoin Testnet</option>
+          </select>
         </div>
-      )}
-      {autoSearchRunning && (() => {
-        const pages = autoSearchCount;
-        const volumes = Math.floor(pages / Number(cryptoUtils.PAGES));
-        const shelves = Math.floor(pages / (Number(cryptoUtils.PAGES) * Number(cryptoUtils.VOLUMES)));
-        const walls = Math.floor(pages / (Number(cryptoUtils.PAGES) * Number(cryptoUtils.VOLUMES) * Number(cryptoUtils.SHELVES)));
-        const hexes = Math.floor(pages / (Number(cryptoUtils.PAGES) * Number(cryptoUtils.VOLUMES) * Number(cryptoUtils.SHELVES) * Number(cryptoUtils.WALLS)));
-        return (
-          <div style={{ marginBottom: 12, color: '#1976d2' }}>
-            Pages searched: {pages}
-            {' '}(
-            ≈ {volumes} volume{volumes !== 1 ? 's' : ''},
-            {` ${shelves}`} shelf{shelves !== 1 ? 's' : ''},
-            {` ${walls}`} wall{walls !== 1 ? 's' : ''},
-            {` ${hexes}`} hex{hexes !== 1 ? 'es' : ''}
-            )
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+          <button onClick={handleFirstPage}>First Page</button>
+          <button onClick={handleRandom}>Random</button>
+          <button onClick={handleLastPage}>Last Page</button>
+          <button onClick={autoSearch} disabled={autoSearchRunning} style={{ background: '#1976d2', color: '#fff' }}>Auto-Search</button>
+          {autoSearchRunning && <button onClick={stopAutoSearch} style={{ background: '#a00', color: '#fff' }}>Stop</button>}
+          <label style={{ marginLeft: 12 }}>
+            Parallelism:
+            <input type="number" min={1} max={10} value={parallelCount} disabled={autoSearchRunning}
+              onChange={e => setParallelCount(Math.max(1, Math.min(10, Number(e.target.value))))}
+              style={{ width: 40, marginLeft: 4 }} />
+          </label>
+        </div>
+        {rateLimitHit && (
+          <div style={{ marginBottom: 8, color: '#b71c1c', fontWeight: 500 }}>
+            ⚠️ Auto-search stopped due to network error or rate limit.<br />
+            Time: {rateLimitTime}<br />
+            Please try again later or reduce parallelism.
           </div>
-        );
-      })()}
-      {autoSearchFound && (
-        <div style={{ marginBottom: 12, color: '#080' }}>
-          🎉 Found non-zero balance!<br />
-          Address: <span style={{ fontFamily: 'monospace' }}>{autoSearchFound.address}</span><br />
-          Balance: {autoSearchFound.balance} BTC<br />
-          Location: Hexagon {autoSearchFound.location.hex}, Wall {autoSearchFound.location.wall}, Shelf {autoSearchFound.location.shelf}, Volume {autoSearchFound.location.volume}, Page {autoSearchFound.location.page}
-        </div>
-      )}
-      <LocationInputs location={location} setLocation={setLocation} clearBrainwalletIfChanged={clearBrainwalletIfChanged} />
-      {didOverflow && <div style={{ color: 'orange', marginBottom: 8 }}>Note: This location is outside the canonical keyspace and wraps around (periodic library).</div>}
-      <CurrentLocation
-        currentKey={currentKey}
-        currentCanonicalBase64={currentCanonicalBase64}
-        pubkeyHex={pubkeyHex}
-        bech32Addr={bech32Addr}
-        network={network}
-        zeroKeyMsg={zeroKeyMsg}
-        isZeroKey={isZeroKey}
-        handleCopyUrl={handleCopyUrl}
-        copyMsg={copyMsg}
-        lastBrainwallet={lastBrainwallet}
-        hex={location.hex}
-        wall={location.wall}
-        shelf={location.shelf}
-        volume={location.volume}
-        page={location.page}
-      />
-      <div>
-        <b>Find location by key or any string:</b>
-        <form
-          onSubmit={e => {
-            e.preventDefault();
-            setSearchResults(cryptoUtils.interpretInput(keyInput.trim()));
-          }}
-          style={{ display: 'inline' }}
-        >
-          <input
-            type="text"
-            placeholder="0x... or any phrase or base64"
-            value={keyInput}
-            onChange={e => setKeyInput(e.target.value)}
-            style={{ width: 340 }}
-          />
-          <button type="submit" style={{ marginLeft: 8 }}>
-            Find Location
-          </button>
-        </form>
-        {searchResults && (
-          <KeyInterpretations
-            searchResults={searchResults}
-            onGoToLocation={(loc) => {
-              setLocation(loc);
-              // Set brainwallet phrase if location matches brainwalletLoc
-              if (searchResults &&
-                  loc.hex === searchResults.brainwalletLoc.hex &&
-                  loc.wall === searchResults.brainwalletLoc.wall &&
-                  loc.shelf === searchResults.brainwalletLoc.shelf &&
-                  loc.volume === searchResults.brainwalletLoc.volume &&
-                  loc.page === searchResults.brainwalletLoc.page
-              ) {
-                setLastBrainwallet({ phrase: searchResults.input, key: searchResults.brainwalletKey });
-              } else {
-                setLastBrainwallet(null);
-              }
-            }}
-            lastBrainwallet={lastBrainwallet}
-            setLastBrainwallet={setLastBrainwallet}
-          />
         )}
+        {autoSearchRunning && (() => {
+          const pages = autoSearchCount;
+          const volumes = Math.floor(pages / Number(cryptoUtils.PAGES));
+          const shelves = Math.floor(pages / (Number(cryptoUtils.PAGES) * Number(cryptoUtils.VOLUMES)));
+          const walls = Math.floor(pages / (Number(cryptoUtils.PAGES) * Number(cryptoUtils.VOLUMES) * Number(cryptoUtils.SHELVES)));
+          const hexes = Math.floor(pages / (Number(cryptoUtils.PAGES) * Number(cryptoUtils.VOLUMES) * Number(cryptoUtils.SHELVES) * Number(cryptoUtils.WALLS)));
+          return (
+            <div style={{ marginBottom: 12, color: '#1976d2' }}>
+              Pages searched: {pages}
+              {' '}(
+              ≈ {volumes} volume{volumes !== 1 ? 's' : ''},
+              {` ${shelves}`} shelf{shelves !== 1 ? 's' : ''},
+              {` ${walls}`} wall{walls !== 1 ? 's' : ''},
+              {` ${hexes}`} hex{hexes !== 1 ? 'es' : ''}
+              )
+            </div>
+          );
+        })()}
+        {autoSearchFound && (
+          <div style={{ marginBottom: 12, color: '#080' }}>
+            🎉 Found non-zero balance!<br />
+            Address: <span style={{ fontFamily: 'monospace' }}>{autoSearchFound.address}</span><br />
+            Balance: {autoSearchFound.balance} BTC<br />
+            Location: Hexagon {autoSearchFound.location.hex}, Wall {autoSearchFound.location.wall}, Shelf {autoSearchFound.location.shelf}, Volume {autoSearchFound.location.volume}, Page {autoSearchFound.location.page}
+          </div>
+        )}
+        <LocationInputs location={location} setLocation={setLocation} clearBrainwalletIfChanged={clearBrainwalletIfChanged} />
+        {didOverflow && <div style={{ color: 'orange', marginBottom: 8 }}>Note: This location is outside the canonical keyspace and wraps around (periodic library).</div>}
+        <CurrentLocation
+          currentKey={currentKey}
+          currentCanonicalBase64={currentCanonicalBase64}
+          pubkeyHex={pubkeyHex}
+          bech32Addr={bech32Addr}
+          network={network}
+          zeroKeyMsg={zeroKeyMsg}
+          isZeroKey={isZeroKey}
+          handleCopyUrl={handleCopyUrl}
+          copyMsg={copyMsg}
+          lastBrainwallet={lastBrainwallet}
+          hex={location.hex}
+          wall={location.wall}
+          shelf={location.shelf}
+          volume={location.volume}
+          page={location.page}
+        />
+        <div>
+          <b>Find location by key or any string:</b>
+          <form
+            onSubmit={e => {
+              e.preventDefault();
+              setSearchResults(cryptoUtils.interpretInput(keyInput.trim()));
+            }}
+            style={{ display: 'inline' }}
+          >
+            <input
+              type="text"
+              placeholder="0x... or any phrase or base64"
+              value={keyInput}
+              onChange={e => setKeyInput(e.target.value)}
+              style={{ width: 340 }}
+            />
+            <button type="submit" style={{ marginLeft: 8 }}>
+              Find Location
+            </button>
+          </form>
+          {searchResults && (
+            <KeyInterpretations
+              searchResults={searchResults}
+              onGoToLocation={(loc) => {
+                setLocation(loc);
+                // Set brainwallet phrase if location matches brainwalletLoc
+                if (searchResults &&
+                    loc.hex === searchResults.brainwalletLoc.hex &&
+                    loc.wall === searchResults.brainwalletLoc.wall &&
+                    loc.shelf === searchResults.brainwalletLoc.shelf &&
+                    loc.volume === searchResults.brainwalletLoc.volume &&
+                    loc.page === searchResults.brainwalletLoc.page
+                ) {
+                  setLastBrainwallet({ phrase: searchResults.input, key: searchResults.brainwalletKey });
+                } else {
+                  setLastBrainwallet(null);
+                }
+              }}
+              lastBrainwallet={lastBrainwallet}
+              setLastBrainwallet={setLastBrainwallet}
+            />
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
