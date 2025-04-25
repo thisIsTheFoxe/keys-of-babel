@@ -79,8 +79,8 @@ const CurrentLocation: React.FC<Props> = (props) => {
       </div>
       {/* Address & Balance Section */}
       <div className="section address-section">
-        <div className="address-row">
-          <span className="address-label">Bech32 Address:</span> <span className="address-value">{bech32Addr}</span>
+        <div className="address-row location-row">
+          <span className="location-label">Bech32 Address:</span> <span className="location-value">{bech32Addr}</span>
         </div>
         <div className="balance-row">
           <span className="balance-label">Balance:</span>{' '}
@@ -105,7 +105,7 @@ const CurrentLocation: React.FC<Props> = (props) => {
       <div className="divider" />
       {/* Location Section */}
       <div className="section location-details">
-        <b>Location:</b>
+        <div className="location-subheader">Location</div>
         <div className="location-row">
           <span className="location-label">Hexagon:</span> <span className="location-value">{hex}</span>
         </div>
@@ -113,6 +113,7 @@ const CurrentLocation: React.FC<Props> = (props) => {
         <div className="location-row"><span className="location-label">Shelf:</span> <span className="location-value">{typeof shelf === 'number' ? shelf : 0}</span></div>
         <div className="location-row"><span className="location-label">Volume:</span> <span className="location-value">{typeof volume === 'number' ? volume : 0}</span></div>
         <div className="location-row"><span className="location-label">Page:</span> <span className="location-value">{typeof page === 'number' ? page : 0}</span></div>
+        <div style={{height: 8}} />
         <div className="location-row"><span className="location-label">Key Index:</span> <span className="location-value">{currentKey.toString()}</span></div>
       </div>
       {isZeroKey && (

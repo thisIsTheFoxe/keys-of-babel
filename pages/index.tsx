@@ -99,13 +99,10 @@ export default function Home() {
 
   // --- Navigation helpers ---
   function handleRandom() {
-    setLocation({
-      hex: cryptoUtils.randomString(1 + Math.floor(Math.random() * 3)),
-      wall: Math.floor(Math.random() * Number(cryptoUtils.WALLS)),
-      shelf: Math.floor(Math.random() * Number(cryptoUtils.SHELVES)),
-      volume: Math.floor(Math.random() * Number(cryptoUtils.VOLUMES)),
-      page: Math.floor(Math.random() * Number(cryptoUtils.PAGES)),
-    });
+    // Pick a random index in the valid keyspace, then convert to location
+    const idx = BigInt(Math.floor(Math.random() * Number(cryptoUtils.N)));
+    const loc = cryptoUtils.indexToLocation(idx);
+    setLocation(loc);
   }
   function handleFirstPage() {
     setLocation({ hex: '0', wall: 0, shelf: 0, volume: 0, page: 0 });
