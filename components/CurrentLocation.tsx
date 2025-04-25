@@ -77,33 +77,29 @@ const CurrentLocation: React.FC<Props> = (props) => {
         <button onClick={handleCopyUrl} className="bookmark-btn">Bookmark/Share</button>
         <span className="copy-msg">{copyMsg}</span>
       </div>
-      {/* Keys Section */}
-      <div className="section keys-section">
-        <div className="privkey-row">
-          <span className="privkey-label">Private Key:</span> <span className="privkey-value">{'0x' + currentKey.toString(16).padStart(64, '0')}</span>
-        </div>
-        <div className="pubkey-row">
-          <span className="pubkey-label">Public Key:</span> <span className="pubkey-value">{pubkeyHex}</span>
-        </div>
-        <div className="base64-row">
-          <span className="base64-label">Canonical Base64:</span> <span className="base64-value">{currentCanonicalBase64}</span>
-        </div>
-      </div>
-      <div className="divider" />
-      {/* Address Section */}
+      {/* Address & Balance Section */}
       <div className="section address-section">
         <div className="address-row">
           <span className="address-label">Bech32 Address:</span> <span className="address-value">{bech32Addr}</span>
         </div>
-      </div>
-      <div className="divider" />
-      {/* Balance Section */}
-      <div className="section balance-section">
         <div className="balance-row">
           <span className="balance-label">Balance:</span>{' '}
           {balanceLoading ? <span className="balance-loading">Loading...</span> :
             balanceError ? <span className="balance-error">{balanceError}</span> :
             balance !== null ? <span className={balance === '0.00000000' ? 'balance-zero' : 'balance-nonzero'}>{balance} BTC</span> : null}
+        </div>
+      </div>
+      <div className="divider" />
+      {/* Keys Section */}
+      <div className="section keys-section">
+        <div className="privkey-row location-row">
+          <span className="location-label">Private Key:</span> <span className="location-value">{'0x' + currentKey.toString(16).padStart(64, '0')}</span>
+        </div>
+        <div className="pubkey-row location-row">
+          <span className="location-label">Public Key:</span> <span className="location-value">{pubkeyHex}</span>
+        </div>
+        <div className="base64-row location-row">
+          <span className="location-label">Canonical Base64:</span> <span className="location-value">{currentCanonicalBase64}</span>
         </div>
       </div>
       <div className="divider" />
