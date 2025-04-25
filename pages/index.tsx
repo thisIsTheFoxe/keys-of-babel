@@ -246,6 +246,9 @@ export default function Home() {
             <option value="mainnet">Bitcoin Mainnet</option>
             <option value="testnet">Bitcoin Testnet</option>
           </select>
+          <span style={{ float: 'right' }}>
+            <a href="/about" style={{ color: '#1976d2', textDecoration: 'underline', fontSize: 16 }}>About / FAQ</a>
+          </span>
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
           <button onClick={handleFirstPage}>First Page</button>
