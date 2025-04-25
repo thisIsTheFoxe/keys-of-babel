@@ -61,7 +61,6 @@ const CurrentLocation: React.FC<Props> = (props) => {
         const funded = data.chain_stats?.funded_txo_sum ?? 0;
         const spent = data.chain_stats?.spent_txo_sum ?? 0;
         const sats = funded - spent;
-        console.log('Balance:', sats, funded, spent);
         setBalance((sats / 1e8).toFixed(8));
       })
       .catch(err => {
