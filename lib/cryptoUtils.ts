@@ -1,5 +1,7 @@
 // All crypto/key/location helpers extracted from index.tsx
 import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
+import { ripemd160 } from '@noble/hashes/ripemd160';
+import { bech32 } from 'bech32';
 
 // Library structure constants
 export const VOLUMES_PER_SHELF = 32;
@@ -177,10 +179,17 @@ export function keyToCanonicalBase64(key: bigint): string {
 export function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes).map(x => x.toString(16).padStart(2, '0')).join('');
 }
-export function pubkeyToP2WPKH(pubkeyHex: string): string {
-  // 1. Hash160 (SHA256 then RIPEMD160)
-  // TODO: Implement or import ripemd160
-  return '';
+export function pubkeyToP2WPKH(pubkeyHex: string, hrp: 'bc' | 'tb' = 'bc'): string {
+  if (!pubkeyHex) return '';
+  // 1. SHA256
+  const pubkeyBytes = Uint8Array.from(Buffer.from(pubkeyHex, 'hex'));
+  const sha = nobleSha256(pubkeyBytes);
+  // 2. RIPEMD160
+  const hash160 = ripemd160(sha);
+  // 3. Bech32 encode (witness version 0)
+  const words = bech32.toWords(hash160);
+  words.unshift(0x00); // witness version 0
+  return bech32.encode(hrp, words);
 }
 
 // Utility for SSR/CSR-safe state initialization
