@@ -9,8 +9,18 @@ interface Props {
 }
 
 const KeyInterpretations: React.FC<Props> = ({ searchResults, onGoToLocation, lastBrainwallet, setLastBrainwallet }) => (
-  <div style={{ marginTop: 18, color: '#444', background: '#f9f9f9', borderRadius: 8, padding: 12 }}>
-    <div style={{ fontWeight: 600, marginBottom: 6 }}>Interpretations for: <span style={{ fontStyle: 'italic' }}>{searchResults.input}</span></div>
+  <div
+    style={{
+      marginTop: 18,
+      color: 'var(--interpret-text, #444)',
+      background: 'var(--interpret-bg, #f9f9f9)',
+      borderRadius: 8,
+      padding: 12
+    }}
+  >
+    <div style={{ fontWeight: 600, marginBottom: 6, fontSize: '1.15em' }}>
+      Interpretations for: <span style={{ fontStyle: 'italic' }}>{searchResults.input}</span>
+    </div>
     <div style={{ marginBottom: 8 }}>
       <div style={{ fontWeight: 500 }}>Brainwallet (SHA256 of input):</div>
       <div style={{ fontSize: 12, color: '#a00', marginBottom: 2 }}>Never use brainwallets for real funds!</div>

@@ -270,7 +270,7 @@ export default function Home() {
             Please try again later or reduce parallelism.
           </div>
         )}
-        {autoSearchRunning && (() => {
+        {(autoSearchRunning || autoSearchCount > 0) && (() => {
           const pages = autoSearchCount;
           const volumes = Math.floor(pages / Number(cryptoUtils.PAGES));
           const shelves = Math.floor(pages / (Number(cryptoUtils.PAGES) * Number(cryptoUtils.VOLUMES)));

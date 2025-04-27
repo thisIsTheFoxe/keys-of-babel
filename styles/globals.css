@@ -164,6 +164,11 @@ a:hover, a:active {
   color: #125199;
 }
 
+:root {
+  --interpret-text: #444;
+  --interpret-bg: #f9f9f9;
+}
+
 @media (prefers-color-scheme: dark) {
   body {
     background: #181a1b;
@@ -221,5 +226,9 @@ a:hover, a:active {
   }
   a:hover, a:active {
     color: #b2daff;
+  }
+  :root {
+    --interpret-text: #e3e6ea;
+    --interpret-bg: #23262b;
   }
 }
