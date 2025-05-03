@@ -81,11 +81,21 @@ const CurrentLocation: React.FC<Props> = (props) => {
         <div className="address-row location-row">
           <span className="location-label">Bech32 Address:</span> <span className="location-value">{bech32Addr}</span>
         </div>
-        <div className="balance-row">
-          <span className="balance-label">Balance:</span>{' '}
-          {balanceLoading ? <span className="balance-loading">Loading...</span> :
-            balanceError ? <span className="balance-error">{balanceError}</span> :
-            balance !== null ? <span className={balance === '0.00000000' ? 'balance-zero' : 'balance-nonzero'}>{balance} BTC</span> : null}
+        <div className="balance-row" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingTop: 4 }}>
+          <span className="balance-label" style={{ minWidth: 78, textAlign: 'right', fontWeight: 500, paddingTop: 2 }}>Balance:</span>
+          {balanceLoading ? (
+            <span className="balance-loading">Loading...</span>
+          ) : balanceError ? (
+            <span className="balance-error">{balanceError}</span>
+          ) : balance !== null ? (
+            balance === '0.00000000' ? (
+              <span className="balance-zero">{balance} BTC</span>
+            ) : (
+              <span className="balance-nonzero balance-highlight">
+                <span role="img" aria-label="wallet">💰</span> <b>{balance} BTC</b>
+              </span>
+            )
+          ) : null}
         </div>
       </div>
       <div className="divider" />
