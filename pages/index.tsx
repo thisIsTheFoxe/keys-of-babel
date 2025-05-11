@@ -88,6 +88,12 @@ export default function Home() {
         const pubkeyBytes = getPublicKey(privHex, true);
         const pubkeyHex = Array.from(pubkeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
         const address = cryptoUtils.pubkeyToP2WPKH(pubkeyHex, network === 'mainnet' ? 'bc' : 'tb');
+
+        // --- NEW: If only one thread, update current location for each searched address ---
+        if (parallelCount === 1) {
+          setLocation(loc);
+        }
+
         // Query Blockstream API
         let balance = '0.00000000';
         try {
@@ -314,6 +320,8 @@ export default function Home() {
           shelf={location.shelf}
           volume={location.volume}
           page={location.page}
+          suppressBalanceFetch={autoSearchRunning && parallelCount === 1}
+          externalBalance={autoSearchRunning && parallelCount === 1 ? autoSearchFound?.balance ?? null : undefined}
         />
         <div>
           <b>Find location by key or any string:</b>

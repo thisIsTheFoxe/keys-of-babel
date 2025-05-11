@@ -16,6 +16,8 @@ interface Props {
   shelf?: number;
   volume?: number;
   page?: number;
+  suppressBalanceFetch?: boolean;
+  externalBalance?: string;
 }
 
 const CurrentLocation: React.FC<Props> = (props) => {
@@ -30,7 +32,9 @@ const CurrentLocation: React.FC<Props> = (props) => {
     handleCopyUrl,
     copyMsg,
     lastBrainwallet,
-    hex, wall, shelf, volume, page
+    hex, wall, shelf, volume, page,
+    suppressBalanceFetch = false,
+    externalBalance,
   } = props;
 
   // Balance state
@@ -39,6 +43,13 @@ const CurrentLocation: React.FC<Props> = (props) => {
   const [balanceError, setBalanceError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (externalBalance !== undefined && externalBalance !== null) {
+      setBalance(externalBalance);
+      setBalanceError(null);
+      setBalanceLoading(false);
+      return;
+    }
+    if (suppressBalanceFetch) return;
     if (!bech32Addr) {
       setBalance(null);
       setBalanceError(null);
@@ -67,7 +78,7 @@ const CurrentLocation: React.FC<Props> = (props) => {
         setBalanceError('Could not fetch balance');
       })
       .finally(() => setBalanceLoading(false));
-  }, [bech32Addr, network]);
+  }, [bech32Addr, network, suppressBalanceFetch, externalBalance]);
 
   return (
     <div className="current-location">
